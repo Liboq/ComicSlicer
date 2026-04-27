@@ -1,0 +1,55 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color: #17211b;
+  background: #f4efe4;
+  font-family: "Noto Serif SC", "LXGW WenKai", "Microsoft YaHei", serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+@layer components {
+  .paper-card {
+    border: 1px solid rgba(23, 33, 27, 0.12);
+    background: rgba(255, 252, 244, 0.86);
+    box-shadow: 0 24px 80px rgba(48, 42, 24, 0.12);
+    backdrop-filter: blur(18px);
+  }
+
+  .control-label {
+    @apply text-sm font-semibold text-stone-700;
+  }
+
+  .control-input {
+    @apply w-full rounded-2xl border border-stone-300 bg-white/80 px-4 py-3 text-stone-900 outline-none transition focus:border-emerald-700 focus:ring-4 focus:ring-emerald-800/10;
+  }
+
+  .primary-button {
+    @apply rounded-2xl bg-emerald-900 px-5 py-3 font-bold text-amber-50 shadow-lg shadow-emerald-950/20 transition hover:-translate-y-0.5 hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:translate-y-0;
+  }
+
+  .secondary-button {
+    @apply rounded-2xl border border-stone-300 bg-white/80 px-4 py-2 font-semibold text-stone-800 transition hover:-translate-y-0.5 hover:border-emerald-800 hover:text-emerald-900 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:translate-y-0;
+  }
+}
