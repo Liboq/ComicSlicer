@@ -130,3 +130,20 @@ src-tauri/target/release/bundle
 ### 拖动分割线会影响其他线吗？
 
 不会。拖动某一根内部截断线只会改变它相邻两格的大小，其他分割线保持不动。
+## GitHub Actions 打包
+
+仓库包含两个 workflow：
+
+- `CI`：推送到 `main` 或创建 PR 时运行测试、前端构建和 `cargo check`。
+- `Release`：手动运行或推送 `v*` tag 时构建 Windows 安装包。
+
+手动打包：进入 GitHub 仓库的 `Actions` 页面，选择 `Release`，点击 `Run workflow`。构建完成后可在 workflow 的 Artifacts 中下载 `ComicSlicer-windows`。
+
+发布打包：创建并推送 tag，例如：
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+GitHub 会自动构建 Windows 安装包，并创建一个 draft release。
