@@ -50,7 +50,7 @@ jobs:
           tagName: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}
           releaseName: ${{ startsWith(github.ref, 'refs/tags/') && format('ComicSlicer {0}', github.ref_name) || '' }}
           releaseBody: "ComicSlicer Windows desktop build."
-          releaseDraft: true
+          releaseDraft: false
           prerelease: false
 
       - name: Upload bundle artifacts
