@@ -81,6 +81,13 @@ export default function App() {
   }, [arrangement, count, cuts, image, targetSize]);
 
   const activePreview = activePreviewIndex === null ? null : previews[activePreviewIndex] ?? null;
+  const latestHistoryUpdate = useMemo(() => {
+    if (history.length === 0) {
+      return null;
+    }
+
+    return Math.max(...history.map((entry) => entry.updatedAt));
+  }, [history]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -145,6 +152,7 @@ export default function App() {
         filenamePrefix,
         targetHeight,
         targetWidth,
+        updatedAt: Date.now(),
       }),
     );
   }, [activeHistoryId, arrangement, count, cuts, filenamePrefix, image, targetHeight, targetWidth]);
@@ -193,10 +201,11 @@ export default function App() {
 
     try {
       const loaded = await loadImage(file);
+      const uploadedAt = Date.now();
       const nextCuts = createEvenCuts(count);
       const nextPrefix = file.name.replace(/\.[^.]+$/, "") || "ComicSlicer_Export";
       const historyEntry = createHistoryEntry({
-        id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        id: `${uploadedAt}-${Math.random().toString(36).slice(2)}`,
         name: file.name,
         imageUrl: loaded.url,
         imageWidth: loaded.width,
@@ -207,7 +216,8 @@ export default function App() {
         arrangement,
         cuts: nextCuts,
         filenamePrefix: nextPrefix,
-        createdAt: Date.now(),
+        createdAt: uploadedAt,
+        updatedAt: uploadedAt,
       });
 
       setImage(loaded);
@@ -483,7 +493,19 @@ export default function App() {
                 </button>
               </ControlStep>
 
-              <ControlStep number={5} title="历史记录">
+              <ControlStep
+                number={5}
+                title={
+                  <span className="flex flex-1 items-center justify-between gap-2">
+                    <span>历史记录</span>
+                    {latestHistoryUpdate && (
+                      <span className="rounded-full bg-[#0F5A43]/10 px-2.5 py-1 text-[11px] font-bold text-[#0F5A43]">
+                        最新 {formatHistoryTime(latestHistoryUpdate)}
+                      </span>
+                    )}
+                  </span>
+                }
+              >
                 {history.length > 0 ? (
                   <div className="max-h-56 space-y-2 overflow-auto pr-1">
                     {history.map((entry) => (
@@ -624,7 +646,7 @@ function Header() {
   );
 }
 
-function ControlStep({ children, number, title }: { children: React.ReactNode; number: number; title: string }) {
+function ControlStep({ children, number, title }: { children: React.ReactNode; number: number; title: React.ReactNode }) {
   return (
     <section>
       <div className="mb-4 flex items-center gap-2">
@@ -925,6 +947,15 @@ function triggerDownload(url: string, filename: string, revokeAfterClick = false
 
 function sanitizeFilename(value: string): string {
   return value.trim().replace(/[\\/:*?"<>|]+/g, "-").replace(/\s+/g, "-") || "ComicSlicer_Export";
+}
+
+function formatHistoryTime(timestamp: number): string {
+  return new Intl.DateTimeFormat("zh-CN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(timestamp));
 }
 
 function clamp(value: number, min: number, max: number): number {

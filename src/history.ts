@@ -13,11 +13,12 @@ export type HistoryEntry = {
   cuts: number[];
   filenamePrefix: string;
   createdAt: number;
+  updatedAt: number;
 };
 
 export type HistoryEntryInput = HistoryEntry;
 
-export type HistoryEntryPatch = Partial<Pick<HistoryEntry, "targetWidth" | "targetHeight" | "count" | "arrangement" | "cuts" | "filenamePrefix">>;
+export type HistoryEntryPatch = Partial<Pick<HistoryEntry, "targetWidth" | "targetHeight" | "count" | "arrangement" | "cuts" | "filenamePrefix" | "updatedAt">>;
 
 export function createHistoryEntry(input: HistoryEntryInput): HistoryEntry {
   return {

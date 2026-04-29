@@ -16,6 +16,7 @@ describe("history helpers", () => {
       cuts: [0, 0.25, 0.5, 0.75, 1],
       filenamePrefix: "page",
       createdAt: 1000,
+      updatedAt: 1000,
     });
 
     expect(entry).toMatchObject({
@@ -27,6 +28,7 @@ describe("history helpers", () => {
       count: 4,
       arrangement: "vertical",
       cuts: [0, 0.25, 0.5, 0.75, 1],
+      updatedAt: 1000,
     });
   });
 
@@ -44,6 +46,7 @@ describe("history helpers", () => {
       cuts: [0, 0.5, 1],
       filenamePrefix: "first",
       createdAt: 1000,
+      updatedAt: 1000,
     });
     const second = createHistoryEntry({
       id: "second",
@@ -58,12 +61,14 @@ describe("history helpers", () => {
       cuts: [0, 0.5, 1],
       filenamePrefix: "second",
       createdAt: 2000,
+      updatedAt: 2000,
     });
 
     const updated = updateHistoryEntry([first, second], "first", {
       count: 3,
       cuts: [0, 0.2, 0.7, 1],
       filenamePrefix: "first-edited",
+      updatedAt: 3000,
     });
 
     expect(updated[0]).toMatchObject({
@@ -71,6 +76,7 @@ describe("history helpers", () => {
       count: 3,
       cuts: [0, 0.2, 0.7, 1],
       filenamePrefix: "first-edited",
+      updatedAt: 3000,
     });
     expect(updated[1]).toEqual(second);
   });
