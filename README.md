@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/assets/readme-banner.png" alt="ComicSlicer Banner" width="100%">
+</p>
+
 # ComicSlicer 漫画格子裁剪器
 
 ComicSlicer 是一个基于 Tauri + Vite + React + Tailwind CSS 的桌面应用，用来把二格、四格或多格连续漫画自动裁剪成单独的漫画格图片。
