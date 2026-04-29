@@ -139,7 +139,14 @@ src-tauri/target/release/bundle
 仓库包含两个 workflow：
 
 - `CI`：推送到 `main` 或创建 PR 时运行测试、前端构建和 `cargo check`。
-- `Release`：手动运行或推送 `v*` tag 时构建 Windows 安装包。
+- `Release`：手动运行或推送 `v*` tag 时构建 Windows 安装包，并生成自动更新签名文件。
+
+自动更新需要在 GitHub 仓库的 `Settings -> Secrets and variables -> Actions` 中配置：
+
+- `TAURI_SIGNING_PRIVATE_KEY`
+- `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`
+
+这两个值必须来自同一组 Tauri updater 签名密钥。私钥不要提交到仓库。
 
 手动打包：进入 GitHub 仓库的 `Actions` 页面，选择 `Release`，点击 `Run workflow`。构建完成后可在 workflow 的 Artifacts 中下载 `ComicSlicer-windows`。
 

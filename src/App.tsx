@@ -47,6 +47,7 @@ export default function App() {
   const [filenamePrefix, setFilenamePrefix] = useState("comic-panel");
   const [previews, setPreviews] = useState<CropPreview[]>([]);
   const [isExporting, setIsExporting] = useState(false);
+  const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
   const [message, setMessage] = useState("上传图片后会自动识别原图尺寸，并填入目标宽高。你也可以拖动预览里的分割线微调每一格。");
 
   const targetSize = useMemo(() => {
@@ -76,6 +77,14 @@ export default function App() {
       cuts,
     });
   }, [arrangement, count, cuts, image, targetSize]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void checkForUpdates(false);
+    }, 1500);
+
+    return () => window.clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     if (!image || !targetSize) {
@@ -188,6 +197,63 @@ export default function App() {
     });
   }
 
+  async function checkForUpdates(manual: boolean) {
+    if (!window.__TAURI_INTERNALS__) {
+      if (manual) {
+        setMessage("浏览器预览模式不支持自动更新，请在桌面应用中检查更新。");
+      }
+      return;
+    }
+
+    setIsCheckingUpdate(true);
+
+    try {
+      const [{ check }, { relaunch }] = await Promise.all([import("@tauri-apps/plugin-updater"), import("@tauri-apps/plugin-process")]);
+      const update = await check();
+
+      if (!update) {
+        if (manual) {
+          setMessage("当前已经是最新版本。");
+        }
+        return;
+      }
+
+      const shouldInstall = window.confirm(`发现新版本 ${update.version}，是否立即下载并安装？\n\n${update.body ?? ""}`);
+      if (!shouldInstall) {
+        setMessage(`发现新版本 ${update.version}，已选择稍后更新。`);
+        return;
+      }
+
+      let downloaded = 0;
+      let contentLength = 0;
+      await update.downloadAndInstall((event) => {
+        switch (event.event) {
+          case "Started":
+            contentLength = event.data.contentLength ?? 0;
+            setMessage(`开始下载新版本 ${update.version}...`);
+            break;
+          case "Progress":
+            downloaded += event.data.chunkLength;
+            if (contentLength > 0) {
+              setMessage(`正在下载新版本 ${update.version}：${Math.round((downloaded / contentLength) * 100)}%`);
+            }
+            break;
+          case "Finished":
+            setMessage("更新下载完成，正在安装并重启应用...");
+            break;
+        }
+      });
+
+      await relaunch();
+    } catch (error) {
+      if (manual) {
+        setMessage(error instanceof Error ? `检查更新失败：${error.message}` : "检查更新失败，请稍后重试。");
+      }
+    } finally {
+      setIsCheckingUpdate(false);
+    }
+  }
+
   return (
     <main className="relative min-h-screen bg-[radial-gradient(circle_at_top_left,#f6d88a_0,#f4efe4_32%,#d7eadb_100%)] px-4 py-6 text-stone-900 sm:px-8 lg:px-10">
       <div className="pointer-events-none absolute inset-0 opacity-35 [background-image:linear-gradient(rgba(23,33,27,.08)_1px,transparent_1px),linear-gradient(90deg,rgba(23,33,27,.08)_1px,transparent_1px)] [background-size:42px_42px]" />
@@ -264,6 +330,10 @@ export default function App() {
 
               <button className="primary-button w-full" disabled={previews.length === 0 || isExporting} type="button" onClick={downloadZip}>
                 {isExporting ? "正在处理..." : `选择位置并批量保存 ${previews.length || ""} 个格子`}
+              </button>
+
+              <button className="secondary-button w-full" disabled={isCheckingUpdate} type="button" onClick={() => checkForUpdates(true)}>
+                {isCheckingUpdate ? "正在检查更新..." : "检查更新"}
               </button>
 
               <p className="rounded-2xl bg-stone-900 px-4 py-3 text-sm leading-6 text-amber-50">{message}</p>
