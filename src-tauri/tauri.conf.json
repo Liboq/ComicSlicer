@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "漫画裁剪器",
+  "productName": "ComicSlicer",
   "version": "0.1.0",
   "identifier": "com.comic.caijian",
   "build": {
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "漫画裁剪器",
+        "title": "ComicSlicer",
         "width": 1280,
         "height": 860,
         "minWidth": 980,
@@ -26,6 +26,8 @@
   "bundle": {
     "active": true,
     "targets": "all",
-    "icon": []
+    "icon": [
+      "icons/icon.ico"
+    ]
   }
 }
