@@ -1,6 +1,7 @@
 import JSZip from "jszip";
 import { ChangeEvent, PointerEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Arrangement, CropRect, buildCropRects, createEvenCuts } from "./cropLayout";
+import { HistoryEntry, createHistoryEntry, updateHistoryEntry } from "./history";
 
 declare global {
   interface Window {
@@ -15,7 +16,8 @@ type CropPreview = CropRect & {
 };
 
 type LoadedImage = {
-  file: File;
+  file?: File;
+  name: string;
   url: string;
   element: HTMLImageElement;
   width: number;
@@ -46,6 +48,9 @@ export default function App() {
   const [cuts, setCuts] = useState(() => createEvenCuts(4));
   const [filenamePrefix, setFilenamePrefix] = useState("ComicSlicer_Export");
   const [previews, setPreviews] = useState<CropPreview[]>([]);
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [activeHistoryId, setActiveHistoryId] = useState<string | null>(null);
+  const [activePreviewIndex, setActivePreviewIndex] = useState<number | null>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
   const [message, setMessage] = useState("上传图片后会自动识别原图尺寸，并填入目标宽高。你也可以拖动预览里的分割线微调每一格。");
@@ -57,10 +62,6 @@ export default function App() {
 
     return { width: targetWidth, height: targetHeight };
   }, [targetHeight, targetWidth]);
-
-  useEffect(() => {
-    setCuts(createEvenCuts(count));
-  }, [arrangement, count]);
 
   const cropRects = useMemo(() => {
     if (!image || !targetSize) {
@@ -77,6 +78,8 @@ export default function App() {
       cuts,
     });
   }, [arrangement, count, cuts, image, targetSize]);
+
+  const activePreview = activePreviewIndex === null ? null : previews[activePreviewIndex] ?? null;
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -124,12 +127,62 @@ export default function App() {
 
   useEffect(() => {
     return () => {
-      if (image) {
-        URL.revokeObjectURL(image.url);
-      }
       revokePreviews(previews);
     };
-  }, [image, previews]);
+  }, [previews]);
+
+  useEffect(() => {
+    if (!image || !activeHistoryId) {
+      return;
+    }
+
+    setHistory((current) =>
+      updateHistoryEntry(current, activeHistoryId, {
+        arrangement,
+        count,
+        cuts,
+        filenamePrefix,
+        targetHeight,
+        targetWidth,
+      }),
+    );
+  }, [activeHistoryId, arrangement, count, cuts, filenamePrefix, image, targetHeight, targetWidth]);
+
+  useEffect(() => {
+    if (activePreviewIndex === null) {
+      return;
+    }
+
+    if (previews.length === 0) {
+      setActivePreviewIndex(null);
+      return;
+    }
+
+    if (activePreviewIndex > previews.length - 1) {
+      setActivePreviewIndex(previews.length - 1);
+    }
+  }, [activePreviewIndex, previews.length]);
+
+  useEffect(() => {
+    if (activePreviewIndex === null) {
+      return;
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setActivePreviewIndex(null);
+      }
+      if (event.key === "ArrowLeft") {
+        setActivePreviewIndex((current) => (current === null || previews.length === 0 ? current : (current - 1 + previews.length) % previews.length));
+      }
+      if (event.key === "ArrowRight") {
+        setActivePreviewIndex((current) => (current === null || previews.length === 0 ? current : (current + 1) % previews.length));
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [activePreviewIndex, previews.length]);
 
   async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -139,19 +192,58 @@ export default function App() {
 
     try {
       const loaded = await loadImage(file);
-      setImage((previous) => {
-        if (previous) {
-          URL.revokeObjectURL(previous.url);
-        }
-        return loaded;
+      const nextCuts = createEvenCuts(count);
+      const nextPrefix = file.name.replace(/\.[^.]+$/, "") || "ComicSlicer_Export";
+      const historyEntry = createHistoryEntry({
+        id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        name: file.name,
+        imageUrl: loaded.url,
+        imageWidth: loaded.width,
+        imageHeight: loaded.height,
+        targetWidth: loaded.width,
+        targetHeight: loaded.height,
+        count,
+        arrangement,
+        cuts: nextCuts,
+        filenamePrefix: nextPrefix,
+        createdAt: Date.now(),
       });
+
+      setImage(loaded);
+      setHistory((current) => {
+        const next = [historyEntry, ...current];
+        next.slice(20).forEach((entry) => URL.revokeObjectURL(entry.imageUrl));
+        return next.slice(0, 20);
+      });
+      setActiveHistoryId(historyEntry.id);
       setTargetWidth(loaded.width);
       setTargetHeight(loaded.height);
-      setCuts(createEvenCuts(count));
-      setFilenamePrefix(file.name.replace(/\.[^.]+$/, "") || "ComicSlicer_Export");
+      setCuts(nextCuts);
+      setFilenamePrefix(nextPrefix);
+      setActivePreviewIndex(null);
       setMessage(`已识别原图尺寸 ${loaded.width} x ${loaded.height}，并填入目标宽高。`);
     } catch {
       setMessage("图片读取失败，请上传 PNG、JPG、WEBP 等常见图片格式。");
+    } finally {
+      event.currentTarget.value = "";
+    }
+  }
+
+  async function restoreHistory(entry: HistoryEntry) {
+    try {
+      const restored = await loadImageUrl(entry.imageUrl, entry.name);
+      setImage(restored);
+      setActiveHistoryId(entry.id);
+      setTargetWidth(entry.targetWidth);
+      setTargetHeight(entry.targetHeight);
+      setCount(entry.count);
+      setArrangement(entry.arrangement);
+      setCuts([...entry.cuts]);
+      setFilenamePrefix(entry.filenamePrefix);
+      setActivePreviewIndex(null);
+      setMessage(`已恢复历史记录：${entry.name}，包含上次保存的分割线位置。`);
+    } catch {
+      setMessage("历史图片读取失败，请重新上传这张漫画。");
     }
   }
 
@@ -197,7 +289,18 @@ export default function App() {
   }
 
   function changeCount(nextCount: number) {
-    setCount(clamp(Math.round(nextCount), 1, 60));
+    const normalizedCount = clamp(Math.round(nextCount), 1, 60);
+    setCount(normalizedCount);
+    setCuts(createEvenCuts(normalizedCount));
+  }
+
+  function changeArrangement(nextArrangement: Arrangement) {
+    if (nextArrangement === arrangement) {
+      return;
+    }
+
+    setArrangement(nextArrangement);
+    setCuts(createEvenCuts(count));
   }
 
   function moveCut(index: number, value: number) {
@@ -282,7 +385,7 @@ export default function App() {
                   <div className="flex items-center gap-3">
                     <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white text-2xl shadow">📄</div>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold">{image?.file.name ?? "点击选择漫画图片"}</p>
+                      <p className="truncate text-sm font-semibold">{image?.name ?? "点击选择漫画图片"}</p>
                       <p className="mt-1 text-xs text-black/45">{image ? `${image.width} x ${image.height} px` : "PNG / JPG / WEBP"}</p>
                     </div>
                     <span className={`rounded-full px-2 py-1 text-xs font-bold ${image ? "bg-[#0F5A43] text-white" : "bg-white text-black/45"}`}>
@@ -317,10 +420,10 @@ export default function App() {
                   <div>
                     <label className="mb-2 block text-sm text-black/60">排列方向</label>
                     <div className="grid grid-cols-2 gap-3">
-                      <DirectionButton active={arrangement === "vertical"} onClick={() => setArrangement("vertical")}>
+                      <DirectionButton active={arrangement === "vertical"} onClick={() => changeArrangement("vertical")}>
                         上下排列
                       </DirectionButton>
-                      <DirectionButton active={arrangement === "horizontal"} onClick={() => setArrangement("horizontal")}>
+                      <DirectionButton active={arrangement === "horizontal"} onClick={() => changeArrangement("horizontal")}>
                         左右排列
                       </DirectionButton>
                     </div>
@@ -379,6 +482,37 @@ export default function App() {
                 </button>
               </ControlStep>
 
+              <ControlStep number={5} title="历史记录">
+                {history.length > 0 ? (
+                  <div className="max-h-56 space-y-2 overflow-auto pr-1">
+                    {history.map((entry) => (
+                      <button
+                        className={`w-full rounded-2xl border p-3 text-left transition ${
+                          entry.id === activeHistoryId ? "border-[#F5B82E] bg-[#FFF8E8] shadow-[0_0_18px_rgba(245,184,46,0.22)]" : "border-black/10 bg-white hover:border-[#F5B82E]"
+                        }`}
+                        key={entry.id}
+                        type="button"
+                        onClick={() => restoreHistory(entry)}
+                      >
+                        <div className="flex items-center gap-3">
+                          <img className="h-12 w-12 rounded-xl bg-[#F6F1E7] object-cover" src={entry.imageUrl} alt={entry.name} />
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-bold">{entry.name}</p>
+                            <p className="mt-1 text-xs text-black/45">
+                              {entry.count} 格 · {entry.arrangement === "vertical" ? "上下" : "左右"} · {entry.targetWidth} x {entry.targetHeight}
+                            </p>
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="rounded-2xl border border-dashed border-black/10 bg-[#F6F1E7] p-4 text-sm leading-6 text-black/45">
+                    上传漫画后会自动生成历史记录，并保留当前分割线位置。
+                  </div>
+                )}
+              </ControlStep>
+
               <div className="grid gap-3">
                 <button className="rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm font-bold text-[#0F5A43] transition hover:border-[#F5B82E]" type="button" onClick={() => setCuts(createEvenCuts(count))}>
                   重置分割线
@@ -413,8 +547,8 @@ export default function App() {
 
             {previews.length > 0 ? (
               <div className="max-h-[620px] space-y-4 overflow-auto pr-1">
-                {previews.map((preview) => (
-                  <article className="rounded-2xl border border-black/10 bg-[#F6F1E7] p-3" key={preview.filename}>
+                {previews.map((preview, index) => (
+                  <article className="cursor-zoom-in rounded-2xl border border-black/10 bg-[#F6F1E7] p-3 transition hover:border-[#F5B82E] hover:bg-[#FFF8E8]" key={preview.filename} onClick={() => setActivePreviewIndex(index)}>
                     <div className="flex gap-3">
                       <img className="h-16 w-28 rounded-lg bg-white object-cover" src={preview.url} alt={`Panel ${preview.index}`} />
                       <div className="min-w-0 flex-1 pt-1 text-sm">
@@ -422,7 +556,14 @@ export default function App() {
                         <p className="mt-1 text-black/45">
                           {Math.round(preview.outputWidth)} x {Math.round(preview.outputHeight)} px
                         </p>
-                        <button className="mt-2 text-xs font-bold text-[#0F5A43] hover:text-[#083B2D]" type="button" onClick={() => triggerDownload(preview.url, preview.filename)}>
+                        <button
+                          className="mt-2 text-xs font-bold text-[#0F5A43] hover:text-[#083B2D]"
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            triggerDownload(preview.url, preview.filename);
+                          }}
+                        >
                           下载单张
                         </button>
                       </div>
@@ -443,6 +584,15 @@ export default function App() {
           </aside>
         </section>
       </div>
+      {activePreview && (
+        <PreviewDialog
+          count={previews.length}
+          preview={activePreview}
+          onClose={() => setActivePreviewIndex(null)}
+          onNext={() => setActivePreviewIndex((current) => (current === null ? current : (current + 1) % previews.length))}
+          onPrevious={() => setActivePreviewIndex((current) => (current === null ? current : (current - 1 + previews.length) % previews.length))}
+        />
+      )}
     </main>
   );
 }
@@ -500,6 +650,64 @@ function DirectionButton({ active, children, onClick }: { active: boolean; child
     >
       {children}
     </button>
+  );
+}
+
+function PreviewDialog({
+  count,
+  onClose,
+  onNext,
+  onPrevious,
+  preview,
+}: {
+  count: number;
+  onClose: () => void;
+  onNext: () => void;
+  onPrevious: () => void;
+  preview: CropPreview;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#061A14]/80 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label={`预览 Panel ${preview.index}`} onClick={onClose}>
+      <div className="relative flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-[28px] bg-[#FFF8E8] shadow-2xl" onClick={(event) => event.stopPropagation()}>
+        <div className="flex items-center justify-between gap-4 border-b border-black/10 bg-white/70 px-5 py-4">
+          <div className="min-w-0">
+            <p className="text-sm font-bold tracking-[0.22em] text-[#0F5A43]">EXPORT PREVIEW</p>
+            <h3 className="truncate text-xl font-black text-[#1F2723]">
+              Panel {String(preview.index).padStart(2, "0")} / {count}
+            </h3>
+          </div>
+          <div className="flex items-center gap-2">
+            <button className="rounded-full border border-black/10 bg-white px-4 py-2 text-sm font-bold text-[#0F5A43] transition hover:border-[#F5B82E]" type="button" onClick={() => triggerDownload(preview.url, preview.filename)}>
+              下载这张
+            </button>
+            <button className="grid h-10 w-10 place-items-center rounded-full bg-[#083B2D] text-xl font-black text-white transition hover:bg-[#0F5A43]" type="button" aria-label="关闭预览" onClick={onClose}>
+              ×
+            </button>
+          </div>
+        </div>
+
+        <div className="relative grid min-h-[50vh] place-items-center bg-[radial-gradient(circle_at_center,#FFFFFF_0,#FFF8E8_45%,#F6F1E7_100%)] p-5">
+          <img className="max-h-[70vh] max-w-full rounded-2xl bg-white object-contain shadow-2xl ring-1 ring-black/10" src={preview.url} alt={`Panel ${preview.index}`} />
+          {count > 1 && (
+            <>
+              <button className="absolute left-4 top-1/2 grid h-12 w-12 -translate-y-1/2 place-items-center rounded-full bg-[#083B2D] text-3xl font-black text-white shadow-lg transition hover:-translate-x-0.5 hover:bg-[#0F5A43]" type="button" aria-label="上一张" onClick={onPrevious}>
+                ‹
+              </button>
+              <button className="absolute right-4 top-1/2 grid h-12 w-12 -translate-y-1/2 place-items-center rounded-full bg-[#083B2D] text-3xl font-black text-white shadow-lg transition hover:translate-x-0.5 hover:bg-[#0F5A43]" type="button" aria-label="下一张" onClick={onNext}>
+                ›
+              </button>
+            </>
+          )}
+        </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-3 bg-white/70 px-5 py-4 text-sm text-black/55">
+          <span>
+            导出尺寸：{Math.round(preview.outputWidth)} x {Math.round(preview.outputHeight)} px
+          </span>
+          <span>支持键盘 Esc 关闭，← / → 切换。</span>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -619,12 +827,24 @@ function loadImage(file: File): Promise<LoadedImage> {
     const element = new Image();
 
     element.onload = () => {
-      resolve({ file, url, element, width: element.naturalWidth, height: element.naturalHeight });
+      resolve({ file, name: file.name, url, element, width: element.naturalWidth, height: element.naturalHeight });
     };
     element.onerror = () => {
       URL.revokeObjectURL(url);
       reject(new Error("Image failed to load"));
     };
+    element.src = url;
+  });
+}
+
+function loadImageUrl(url: string, name: string): Promise<LoadedImage> {
+  return new Promise((resolve, reject) => {
+    const element = new Image();
+
+    element.onload = () => {
+      resolve({ name, url, element, width: element.naturalWidth, height: element.naturalHeight });
+    };
+    element.onerror = () => reject(new Error("Image failed to load"));
     element.src = url;
   });
 }
