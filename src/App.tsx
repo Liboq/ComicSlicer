@@ -1,5 +1,6 @@
 import JSZip from "jszip";
 import { ChangeEvent, PointerEvent, useEffect, useMemo, useRef, useState } from "react";
+import logoUrl from "./assets/logo.webp";
 import { Arrangement, CropRect, buildCropRects, createEvenCuts } from "./cropLayout";
 import { HistoryEntry, createHistoryEntry, updateHistoryEntry } from "./history";
 
@@ -603,14 +604,8 @@ function Header() {
       <div className="absolute right-0 top-0 h-56 w-56 rounded-full bg-white/5 blur-2xl" />
       <div className="relative flex flex-col gap-8 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:gap-6">
-          <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-3xl bg-white/10 shadow-inner ring-1 ring-white/15">
-            <div className="relative h-12 w-10 rounded-md bg-[#FFF8E8] shadow-lg">
-              <div className="absolute left-2 top-2 h-3 w-3 border border-[#083B2D]" />
-              <div className="absolute right-2 top-2 h-3 w-3 border border-[#083B2D]" />
-              <div className="absolute bottom-2 left-2 h-3 w-3 border border-[#083B2D]" />
-              <div className="absolute bottom-2 right-2 h-3 w-3 border border-[#083B2D]" />
-              <div className="absolute left-1/2 top-1 h-10 w-[3px] -translate-x-1/2 rounded bg-[#F5B82E] shadow-[0_0_18px_rgba(245,184,46,0.75)]" />
-            </div>
+          <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-3xl bg-[#041A14] shadow-inner ring-1 ring-white/15">
+            <img className="h-full w-full object-cover" src={logoUrl} alt="ComicSlicer logo" />
           </div>
 
           <div>
